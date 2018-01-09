@@ -1,12 +1,8 @@
-import io,sys
 import requests
 import json
 import xlwt
 import time
 import random
-
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer,encoding='utf-8')
-
 
 
 # 获取职位json
@@ -24,8 +20,10 @@ def get_json(url, kd, page):
     cookies = {
         'Cookie': 'JSESSIONID=ABAAABAACDBABJB477830E740BBFD22D693ACC2D2AFD7F6; user_trace_token=20180105135028-a118aa1b-ab84-4658-9220-3ca2b04b921f; _ga=GA1.2.1427071389.1515131415; _gid=GA1.2.1682641947.1515131415; Hm_lvt_4233e74dff0ae5bd0a3d81c6ccf756e6=1515131415; LGUID=20180105135030-56ad3ff2-f1dc-11e7-a015-5254005c3644; TG-TRACK-CODE=search_code; LGSID=20180105164714-06cdee38-f1f5-11e7-a015-5254005c3644; X_HTTP_TOKEN=c41f8f03ff82ed82b944a7e671d5cc6a; _gat=1; SEARCH_ID=3e642cab3b754a0387f4ddd1ef44ac67; Hm_lpvt_4233e74dff0ae5bd0a3d81c6ccf756e6=1515144376; LGRID=20180105172632-8481a7d8-f1fa-11e7-bf06-525400f775ce'
     }
-    data = {'first': 'true', 'pn': page, 'kd': kd}
-    return requests.post(url, headers=headers, cookies=cookies, data=data).json()
+    data = {'first': 'false', 'pn': page, 'kd': kd}
+    json = requests.post(url, headers=headers, cookies=cookies, data=data).json()
+
+    return parse_json(json['content']['positionResult']['result'])
 
 
 # 解析每页json		
@@ -79,6 +77,7 @@ def create_excel():
             data_sheet.col(i).width = 10240
         else:
             data_sheet.col(i).width = 5120
+
     return workbook,data_sheet
 
 
@@ -89,28 +88,30 @@ def write_excel(workbook, sheet, data, page):
     for i in range(len(data)):  
         job = data[i]
         for j in range(len(job)):
-            sheet.write(index_base + i, j, job[j], set_style('Times New Roman', 220, False))
+            sheet.write(index_base + i, j, job[j])
 
 
-
+# 入口程序
 def main(kd='python'):
     url = 'https://www.lagou.com/jobs/positionAjax.json?needAddtionalResult=false&isSchoolJob=0'
+    # 创建表格
     workbook,data_sheet = create_excel()
-    # 爬取
-    for page in range(0,3):
-        json = get_json(url, kd, page)
-        page_data = parse_json(json['content']['positionResult']['result'])
+    # 爬取数据写入表格中
+    for page in range(0,10):
+        print('正在爬取第%d页数据。。。' % (page+1))
+        page_data = get_json(url, kd, page)
         write_excel(workbook,data_sheet,page_data,page+1)
 
-        # 一页爬取完就随机sleep
-        # time.sleep(20 + random.randint(0,20))
+        # # 一页爬取完就随机sleep(防止出现操作频繁拒绝访问的警告)
+        time.sleep(25 + random.randint(0,25))
         
-
-    # 保存数据表格
+    # 完成后保存数据表格
     workbook.save(kd + '_job.xls')
     print(u'创建' + kd + '_job.xls文件成功')
 
 
 
 if __name__ == '__main__':
+    # main('java')
     main()
+    
