@@ -1,10 +1,8 @@
 import requests
 import json
-import time
 import datetime
-import random
 from pymongo import MongoClient
-
+from proxies import get_proxie_dict
 
 # 获取职位json
 def get_json(url, kd, page):
@@ -22,8 +20,8 @@ def get_json(url, kd, page):
         'Cookie': 'JSESSIONID=ABAAABAACDBABJB477830E740BBFD22D693ACC2D2AFD7F6; user_trace_token=20180105135028-a118aa1b-ab84-4658-9220-3ca2b04b921f; _ga=GA1.2.1427071389.1515131415; _gid=GA1.2.1682641947.1515131415; Hm_lvt_4233e74dff0ae5bd0a3d81c6ccf756e6=1515131415; LGUID=20180105135030-56ad3ff2-f1dc-11e7-a015-5254005c3644; TG-TRACK-CODE=search_code; LGSID=20180105164714-06cdee38-f1f5-11e7-a015-5254005c3644; X_HTTP_TOKEN=c41f8f03ff82ed82b944a7e671d5cc6a; _gat=1; SEARCH_ID=3e642cab3b754a0387f4ddd1ef44ac67; Hm_lpvt_4233e74dff0ae5bd0a3d81c6ccf756e6=1515144376; LGRID=20180105172632-8481a7d8-f1fa-11e7-bf06-525400f775ce'
     }
     data = {'first': 'false', 'pn': page, 'kd': kd}
-    json = requests.post(url, headers=headers, cookies=cookies, data=data).json()
-
+    json = requests.post(url, headers=headers, proxies=get_proxie_dict(), cookies=cookies, data=data).json()
+    
     return json['content']['positionResult']['result']
 
 
@@ -42,7 +40,11 @@ def save_json(json, db):
         item['salary'] = job['salary']    #薪资
         item['workYear'] = job['workYear']   #工作年限
         item['updateTime'] = datetime.datetime.now()  #更新时间
-        db.lagou.insert(item)  
+        result = db.lagou.find_one({'_id': item['_id']}) 
+        # 如果存在重复职位，不添加进去
+        if not result: 
+            db.lagou.insert(item)
+            
 
 # 入口程序
 def main(kd='python'):
@@ -51,20 +53,18 @@ def main(kd='python'):
     # 打开数据库
     client = MongoClient('localhost',27017)
     db = client.spiderDB
+
     # 先清空集合
     db.lagou.remove({})
-    for i in db.lagou.find():  
-        print(i)  
+    
     # 循环获取数据
-    for page in range(0,2):
+    for page in range(0,30):
         print('正在爬取第%d页数据。。。' % (page+1))
 
         json = get_json(url, kd, page)
         save_json(json=json, db=db)
-
-        # 一页爬取完就随机sleep(防止出现操作频繁拒绝访问的警告)
-        time.sleep(25 + random.randint(0,25))
         
+    print('数据爬取完毕！')
 
 
 if __name__ == '__main__':
