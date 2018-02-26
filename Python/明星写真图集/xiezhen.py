@@ -1,8 +1,9 @@
 import requests
-import sys,re,os
+import re,os
 from threading import Thread
 from queue import Queue
-from time import sleep
+import time
+import random
 
 
 # 明星地址队列FIFO
@@ -63,29 +64,37 @@ class DownloadImg:
     self.getImgUrls(page)
 
     # 下一页的url
-    # nextPage = page
-    # pageBaseUrl = url[:-10:1]
-    # pattern = re.compile(r'<a href="(.*?)">下一页</a>',re.S)
-    # item = re.findall(pattern,nextPage)
-    # print(item)
+    nextPage = page
+    pageBaseUrl = url[:-10:1]
+    # 这里没有写下一页，不会被正常解析，原因可能是编码不一致
+    pattern = re.compile(r"<li><a href='(.*?)'>.*?</a></li>",re.S)
 
-    # while True:
-    #   item = re.findall(pattern,nextPage)
-    #   print(item)
-    #   if newxtUrl == "#":
-    #     return None
-    #   else:
-    #     nextPage = self.getPage(pageBaseUrl + newxtUrl)
-    #     self.getImgUrls(nextPage)
+    item = re.findall(pattern,nextPage)
+    while True:
+      item = re.findall(pattern,nextPage)
+      # 获取下一页的地址
+      nextUrl = item[len(item)-1]
+      if nextUrl == "#":
+        return None
+      else:
+        nextPage = self.getPage(pageBaseUrl + nextUrl)
+        self.getImgUrls(nextPage)
 
 
   # 获取展示页面中img的url
   def getImgUrls(self,page):
-    pattern = re.compile(r'<a.*?title="点击图片进入下一页".*?src="(.*?)".*?</a>',re.S)
+    # 前面页面是下一页，最后一页是下一篇
+    pattern = re.compile(r"<a.*?title='点击图片进入下一.*?<img src='(.*?)'",re.S)
     urls = re.findall(pattern,page)
-    print(urls)
     for url in urls:
       self.urls.append(url)
+
+
+  # 获取图片类型
+  def getImgType(self,url):
+    arr = url.split('.')
+    l = len(arr)
+    return arr[l-1]
 
 
   # 保存图片,folder为文件夹
@@ -95,18 +104,14 @@ class DownloadImg:
       ir = requests.get(url,stream=True)
       if ir.status_code == 200:
         imgType = self.getImgType(url) 
-        with open('/%s/%d.%s' % (folder,i,imgType), 'wb') as f:
+        with open('%s/%d.%s' % (folder,i,imgType), 'wb') as f:
           f.write(ir.content)
           f.flush()
         i +=1
+    # 一个图片下载任务完成后清空
+    self.urls = []
 
-
-  def getImgType(self,url):
-    arr = url.split('.')
-    l = len(arr)
-    return arr[l-1]
-
-
+  # 创建文件夹
   def mkdir(self,path):
     path = path.strip()
     # 判断路径是否存在
@@ -120,35 +125,36 @@ class DownloadImg:
       return False
 
 
-  # def start(self):
-  #   global soriQ
-  #   while not soriQ.empty():
-  #     item = soriQ.get()
-  #     # 创建文件夹
-  #     self.mkdir(item[1])
-  #     # 获取图片地址
-  #     self.getAllUrls(item[0])
-  #     print(self.urls)
-  #     # 下载图片
-  #     self.saveImg(item[1])
-  #     # 完成一项任务
-  #     soriQ.task_done()
-
-
   def start(self):
+    # 多个进程公用一个队列
     global soriQ
-    item = soriQ.get()
-    # 创建文件夹
-    self.mkdir(item[1])
-    # 获取图片地址
-    self.getAllUrls(item[0])
-    # 下载图片
-    self.saveImg(item[1])
-    # 完成一项任务
-    soriQ.task_done()
-  
+    while not soriQ.empty():
+      item = soriQ.get()
+      # 创建文件夹
+      self.mkdir(item[1])
+      # 获取图片地址
+      self.getAllUrls(item[0])
+      # 下载图片
+      self.saveImg(item[1])
+      # 完成一项任务
+      soriQ.task_done()
+      # 休眠，time.sleep是对当前线程的sleep
+      time.sleep(10 + random.randint(0,10))
 
-url = RosiUrl()
-url.start(1)
-img = DownloadImg()
-img.start()
+
+
+if __name__ == '__main__':
+  ru = RosiUrl()
+  ru.start(5)
+
+  for i in range(5):#新建5个线程 等待队列
+    di = DownloadImg()
+    t = Thread(target=di.start)
+    # 父线程为守护进程
+    t.setDaemon(True)
+    t.start()
+
+  # 阻塞调用线程，直到队列中的所有任务被处理掉。
+  # 当未完成的任务数降到0，join()解除阻塞。
+  global soriQ
+  soriQ.join()
