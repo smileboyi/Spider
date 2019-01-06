@@ -52,7 +52,7 @@ class DownloadImg:
 
   # 获取展示页面的代码
   def getPage(self,url):
-    response = requests.get(url)
+    response = requests.get('https:' + url)
     response.encoding = 'gbk'
     return response.text
 
@@ -102,6 +102,7 @@ class DownloadImg:
     i = 1
     for url in self.urls:
       ir = requests.get(url,stream=True)
+      # ir：<Response [403]>，通过proxys和headers解决
       if ir.status_code == 200:
         imgType = self.getImgType(url) 
         with open('%s/%d.%s' % (folder,i,imgType), 'wb') as f:
@@ -156,5 +157,4 @@ if __name__ == '__main__':
 
   # 阻塞调用线程，直到队列中的所有任务被处理掉。
   # 当未完成的任务数降到0，join()解除阻塞。
-  global soriQ
   soriQ.join()
